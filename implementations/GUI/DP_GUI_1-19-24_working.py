@@ -1,0 +1,702 @@
+import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from datetime import datetime, timedelta, time
+import math
+from datetime import datetime, timedelta
+import plotly.offline as pyo
+
+from dash import Dash, dcc, html, Input, Output
+import plotly.graph_objects as go
+import pandas as pd
+from dash.dependencies import Input, Output, State
+from plotly.subplots import make_subplots
+from DP_API_IN import Get_Historical_Min, Get_Historical_Day
+from DP_Indicators import Expand_1minute_Data, StockData
+import webbrowser
+from globals import HistBeginDateTime, HistEndDateTime
+
+
+
+#*************************************************************
+def Chart_Plot_Std(Ticker, df, df5, df15, dfD):
+
+    # Create fig with subplots
+    fig = make_subplots(rows=2, cols=4, subplot_titles=[ '1 Day', '15 Minute', '5 Minute', '1 Minute',
+                         '', '', '', ''],
+                        row_width=[0.15, 0.6], shared_yaxes=False, vertical_spacing=0.17,
+                        horizontal_spacing=0.02, print_grid=False, )
+    #pyo.plot(fig, filename='your_plot.html', auto_open=False)
+
+    # Add 1M Candlestick Chart
+    fig.add_trace(go.Candlestick(x=df.index, open=df.open, high=df.high, low=df.low, close=df.close ), row=1, col=4)
+    fig.add_trace(go.Scatter(x=df.index, y=df.SMA3, mode='lines', name='SMA3', line_color='#ff00ff'), row=1, col=4)
+    fig.add_trace(go.Scatter(x=df.index, y=df.SMA14, mode='lines', name='SMA14', line_color='#ff0000'), row=1,  col=4)
+    fig.add_trace( go.Scatter(x=df.index, y=df.SMA50, mode='lines', name='SMA50', line_color='#00ff00', line_width=2), row=1, col=4)
+    fig.add_trace( go.Scatter(x=df.index, y=df.SMA200, mode='lines', name='SMA200', line_color='#0000ff', line_width=3), row=1, col=4)
+    fig.add_trace(go.Scatter(x=df.index, y=df.BBL_14_2, mode='lines', name='BBL_14_2', line=dict(color='#56a6ae', dash='dash')), row=1,col=4)
+    fig.add_trace(go.Scatter(x=df.index, y=df.BBU_14_2, mode='lines', name='BBU_14_2', line=dict(color='#56a6ae', dash='dash')), row=1,col=4)
+    fig.update_xaxes(title_text="Slider - 1 Minute Time Interval", row=1, col=4)
+
+    # Add Volume Chart to Row 2 of subplot
+    fig.add_trace(go.Bar(x=df.index, y=df.volume, marker=dict(color='#7cadf8')), row=2, col=4)
+
+
+    # Add 5M Candlestick Chart
+    fig.add_trace(go.Candlestick(x=df5.index, open=df5.open, high=df5.high, low=df5.low,close=df5.close ), row=1, col=3)
+    fig.add_trace(go.Scatter(x=df5.index, y=df5.SMA3, mode='lines', name='SMA3', line_color='#ff00ff'), row=1,col=3)
+    fig.add_trace(go.Scatter(x=df5.index, y=df5.SMA14, mode='lines', name='SMA14', line_color='#ff0000'), row=1, col=3)
+    fig.add_trace( go.Scatter(x=df5.index, y=df5.SMA50, mode='lines', name='SMA50', line_color='#00ff00', line_width=2), row=1, col=3)
+    fig.add_trace( go.Scatter(x=df5.index, y=df5.SMA200, mode='lines', name='SMA200', line_color='#0000ff', line_width=3), row=1, col=3)
+    fig.add_trace(go.Scatter(x=df5.index, y=df5.BBL_14_2, mode='lines', name='BBL_14_2', line=dict(color='#56a6ae', dash='dash')), row=1,  col=3)
+    fig.add_trace(go.Scatter(x=df5.index, y=df5.BBU_14_2, mode='lines', name='BBU_14_2', line=dict(color='#56a6ae', dash='dash')), row=1, col=3)
+    fig.update_xaxes(title_text="Slider - 5 Minute Time Interval", row=1, col=3)
+    # Add Volume Chart to Row 2 of subplot
+    fig.add_trace(go.Bar(x=df5.index, y=df5.volume, marker=dict(color='#7cadf8')), row=2, col=3)
+
+    # Add 15M Candlestick Chart
+    fig.add_trace(go.Candlestick(x=df15.index, open=df15.open, high=df15.high, low=df15.low, close=df15.close ), row=1, col=2)
+    fig.add_trace(go.Scatter(x=df15.index, y=df15.SMA3, mode='lines', name='SMA3', line_color='#ff00ff'), row=1,col=2)
+    fig.add_trace(go.Scatter(x=df15.index, y=df15.SMA14, mode='lines', name='SMA14', line_color='#ff0000'), row=1, col=2)
+    fig.add_trace( go.Scatter(x=df15.index, y=df15.SMA50, mode='lines', name='SMA50', line_color='#00ff00', line_width=2),  row=1, col=2)
+    fig.add_trace( go.Scatter(x=df15.index, y=df15.SMA200, mode='lines', name='SMA200', line_color='#0000ff', line_width=3), row=1, col=2)
+    fig.add_trace(go.Scatter(x=df15.index, y=df15.BBL_14_2, mode='lines', name='BBL_14_2', line=dict(color='#56a6ae', dash='dash')), row=1, col=2)
+    fig.add_trace(go.Scatter(x=df15.index, y=df15.BBU_14_2, mode='lines', name='BBU_14_2', line=dict(color='#56a6ae', dash='dash')), row=1,  col=2)
+    fig.update_xaxes(title_text="Slider - 15 Minute Time Interval", row=1, col=2)
+    # Add Volume Chart to Row 2 of subplot
+    fig.add_trace(go.Bar(x=df15.index, y=df15.volume, marker=dict(color='#7cadf8')), row=2, col=2)
+
+    # Add Day Candlestick Chart
+    fig.add_trace(go.Candlestick(x=dfD.index, open=dfD.open, high=dfD.high, low=dfD.low, close=dfD.close),row=1, col=1)
+    fig.add_trace(go.Scatter(x=dfD.index, y=dfD.SMA3_1D, mode='lines', name='SMA3_1D', line_color='#ff00ff'), row=1, col=1)
+    fig.update_xaxes(title_text="Slider - 1 Day Time Interval", row=1, col=1)
+    fig.update_xaxes(rangeslider_thickness=0.02)
+    # Add Volume Chart to Row 2 of subplot
+    fig.add_trace(go.Bar(x=dfD.index, y=dfD.volume, marker=dict(color='#7cadf8')), row=2, col=1)
+
+    # 1 Min Update the time selected zoom
+    current_time = datetime.now()
+    new_time = current_time + timedelta(minutes=1)                      #inset right side by 1 ticks
+    formatted_new_time = new_time.strftime("%H:%M")                     #right side of graph is current time
+    end_time_1 = datetime.strptime(formatted_new_time, '%H:%M')
+    new_time = current_time - timedelta(minutes=30)                     # set range for plot
+    formatted_new_time = new_time.strftime("%H:%M")
+    start_time_1 = datetime.strptime(formatted_new_time, '%H:%M')
+    last_day = df.index[-1].date()
+    start_datetime_1 = datetime.combine(last_day, start_time_1.time())
+    end_datetime_1 = datetime.combine(last_day, end_time_1.time())
+
+    # 5 Min Update the time selected zoom to last day view
+    current_time = datetime.now()
+    new_time = current_time + timedelta(minutes=5)                     # inset right side by 1 ticks
+    formatted_new_time = new_time.strftime("%H:%M")
+    end_time_5 = datetime.strptime(formatted_new_time, '%H:%M')
+    new_time = current_time - timedelta(minutes=150)                    # set range for plot
+    formatted_new_time = new_time.strftime("%H:%M")
+    start_time_5 = datetime.strptime(formatted_new_time, '%H:%M')
+    last_day = df.index[-1].date()
+    start_datetime_5 = datetime.combine(last_day, start_time_5.time())
+    end_datetime_5 = datetime.combine(last_day, end_time_5.time())
+
+    # 15 Min Update the time selected zoom to last day view
+    current_time = datetime.now()
+    new_time = current_time + timedelta(minutes=15)                     # inset right side by 1 ticks
+    formatted_new_time = new_time.strftime("%H:%M")
+    end_time_15 = datetime.strptime(formatted_new_time, '%H:%M')
+    #new_time = current_time - timedelta(minutes=450)                    # set range for plot
+    new_time = time(5,0) # set range for plot
+    formatted_new_time = new_time.strftime("%H:%M")
+    start_time_15 = datetime.strptime(formatted_new_time, '%H:%M')
+    last_day = df.index[-1].date()
+    start_datetime_15 = datetime.combine(last_day, start_time_15.time())
+    end_datetime_15 = datetime.combine(last_day, end_time_15.time())
+
+    # Set the x-axis range for each subplot
+    fig.update_xaxes(range=[start_datetime_1, end_datetime_1], row=1, col=4)    # 1 min chart
+    fig.update_xaxes(range=[start_datetime_1, end_datetime_1], row=2, col=4)    # 1 min chart volume
+    fig.update_xaxes(range=[start_datetime_5, end_datetime_5], row=1, col=3)    # 5 min chart
+    fig.update_xaxes(range=[start_datetime_5, end_datetime_5], row=2, col=3)    # 5 min chart volume
+    fig.update_xaxes(range=[start_datetime_15, end_datetime_15], row=1, col=2)  # 15 min chart
+    fig.update_xaxes(range=[start_datetime_15, end_datetime_15], row=2, col=2)  # 15 min chart volume
+
+    # fig.update_xaxes(range=[start_datetime, end_datetime], row=1, col=1)      # day - full scale default
+
+    HistBeginDateTimeVar = datetime.strptime(HistBeginDateTime, "%Y-%m-%d %H:%M:%S")
+    twenty_day_prior = HistBeginDateTimeVar - timedelta(days=30)
+    filtered_df_1Day = dfD.loc[twenty_day_prior:HistEndDateTime]
+    fig.update_xaxes(range=[twenty_day_prior, HistEndDateTime], row=1, col=1)
+
+    # get y range - minutes
+    filtered_df_1min = df.loc[start_datetime_15:end_datetime_15]
+    Dyn_Ymin = math.floor(filtered_df_1min['low'].min() * 0.995)
+    Dyn_Ymax = math.ceil(filtered_df_1min['high'].max() * 1.005)
+    # get y range - day
+    Dyn_YminD = (filtered_df_1Day['low'].min() * 0.995)
+    Dyn_YmaxD = (filtered_df_1Day['high'].max() * 1.005)
+    if Dyn_Ymax > Dyn_YmaxD:
+        Dyn_YmaxD = Dyn_Ymax
+    delta = round(Dyn_YmaxD - Dyn_YminD)
+    tick1 = delta / 50
+    tick2 = round(tick1)
+    Dyn_Ymin2 = round(Dyn_YminD)
+    Dyn_Ymax2 = round(Dyn_YmaxD)
+
+    fig.update_yaxes(range=[Dyn_Ymin2, Dyn_Ymax2], side='right', row=1, col=1, dtick=tick2)  # 1 Day
+    fig.update_yaxes(range=[Dyn_Ymin, Dyn_Ymax], side='right', row=1, col=2, dtick=1)  # 15 min
+    fig.update_yaxes(range=[Dyn_Ymin, Dyn_Ymax], side='right', row=1, col=3, dtick=1)  # 5 min
+    fig.update_yaxes(range=[Dyn_Ymin, Dyn_Ymax], side='right', row=1, col=4, dtick=1)  # 1 min
+
+
+
+    fig.update_yaxes(color='#000000', range=[0, 6000000], row=2, col=2)
+    fig.update_yaxes(color='#000000', range=[0, 2000000], row=2, col=3)
+    fig.update_yaxes(color='#000000', range=[0, 500000], row=2, col=4)
+
+    fig.update_xaxes(gridcolor='lightgrey', row=1, col=1, dtick=24 * 60 * 60 * 1000, tickformat='%m-%d %H:%M')    # 1 Day graph ticks
+    fig.update_xaxes(gridcolor='lightgrey', row=1, col=2, dtick=15 * 60 * 1000, tickformat='%m-%d %H:%M')         #15 min graph ticks
+    fig.update_xaxes(gridcolor='lightgrey', row=1, col=3, dtick=5 * 60 * 1000, tickformat='%m-%d %H:%M')          #5 min graph ticks
+    fig.update_xaxes(gridcolor='lightgrey', row=1, col=4, dtick=1 * 60 * 1000, tickformat='%m-%d %H:%M')          #1 min graph ticks
+
+    # Update traces name in legend (if on)
+    fig.update_traces(name=Ticker, selector=dict(type='candlestick'))
+
+    #fig.update_layout(title_text=Ticker, xaxis1_rangeslider_visible=True, xaxis2_rangeslider_visible=True,
+    #                  xaxis_rangeslider_thickness=0.02,
+    #                  height=1280, width=2500, showlegend=False)
+
+    fig.update_layout(
+        title=dict(
+            text=Ticker,
+            font=dict(
+                family="Arial",
+                size=32,
+                color="black"
+            )
+        ),
+        xaxis1_rangeslider_visible=True,
+        xaxis2_rangeslider_visible=True,
+        xaxis_rangeslider_thickness=0.02,
+        height=1280,
+        width=2500,
+        showlegend=False
+    )
+
+    #fig.update_layout(yaxis=dict(tickmode= 'linear', tick0= Dyn_Ymin, dtick = 1))
+    #fig.update_layout(xaxis=dict(tickmode='linear', tick0=0.25, dtick=1))
+
+    # Prototype - Add Special lines, trends, key levels, BUY indications etc.
+    '''
+    fig.update_layout(
+        title='NVDA Analysis',
+        yaxis_title='NVDA Price [USD]',
+        shapes=[dict(
+            x0='2023-12-22 10:00:00', x1='2023-12-22 10:00:00', y0=0.0, y1=1, xref='x', yref='paper',
+            line_width=1)],
+        annotations=[dict(
+            x='2023-12-22 10:00:00', y=0.0, xref='x', yref='paper',
+            showarrow=False, xanchor='left', text='Buy')],
+        showlegend=False  # Hide legend for better visualization
+    )
+    '''
+
+    #*************** END OF INITIAL DISPLAY CONTENT AND PRESENTATION *************************************
+
+    app = Dash(__name__)
+
+
+    app.layout = html.Div([
+        dcc.Graph(
+            id='subplot-graph',
+            figure=fig,
+            config = {'modeBarButtonsToRemove': ['pan2d', 'lasso2d'], 'displayModeBar': False},
+            style = {'cursor': 'arrow'}
+    ),
+        #html.Button('Click to Update Display', id='update-button'),
+        dcc.Interval(
+            id='interval-component',
+            interval= 10 * 1000,  # in milliseconds
+            n_intervals=0
+        )
+
+    ])
+
+    @app.callback(
+        Output('subplot-graph', 'figure'),  # Output: the figure to be updated
+        #[Input('update-button', 'n_clicks')],  # Input: trigger for update
+        [Input('interval-component', 'n_intervals')],
+        [State('subplot-graph', 'figure')]  # Include current figure as State
+    )
+    def update_graph(n_intervals, current_fig):
+        # Get New Data
+        Num_Days_Data = 5
+        SymbolDataH, df1H = Get_Historical_Min(Ticker, Num_Days_Data)  # Get historical into a DataFrame
+        df1H['datetime'] = pd.to_datetime(df1H['timestamp'], unit='ms') - pd.Timedelta(hours=7)
+        df1H.set_index("datetime", inplace=True)  # index with date time as index axis
+        df1min = df1H
+        df, df5, df15 = Expand_1minute_Data(df1H)
+
+        #Update
+
+        # Create fig with subplots
+        fig = make_subplots(rows=2, cols=4, subplot_titles=['1 Day', '15 Minute', '5 Minute', '1 Minute',
+                                                            '', '', '', ''],
+                            row_width=[0.15, 0.65], shared_yaxes=False, vertical_spacing=0.17,
+                            horizontal_spacing=0.02, print_grid=False, )
+        # pyo.plot(fig, filename='your_plot.html', auto_open=False)
+
+        # Add 1M Candlestick Chart
+        fig.add_trace(go.Candlestick(x=df.index, open=df.open, high=df.high, low=df.low, close=df.close), row=1, col=4)
+        fig.add_trace(go.Scatter(x=df.index, y=df.SMA3, mode='lines', name='SMA3', line_color='#ff00ff'), row=1, col=4)
+        fig.add_trace(go.Scatter(x=df.index, y=df.SMA14, mode='lines', name='SMA14', line_color='#ff0000'), row=1,
+                      col=4)
+        fig.add_trace(
+            go.Scatter(x=df.index, y=df.SMA50, mode='lines', name='SMA50', line_color='#00ff00', line_width=2), row=1,
+            col=4)
+        fig.add_trace(
+            go.Scatter(x=df.index, y=df.SMA200, mode='lines', name='SMA200', line_color='#0000ff', line_width=3), row=1,
+            col=4)
+        fig.add_trace(go.Scatter(x=df.index, y=df.BBL_14_2, mode='lines', name='BBL_14_2',
+                                 line=dict(color='#56a6ae', dash='dash')), row=1, col=4)
+        fig.add_trace(go.Scatter(x=df.index, y=df.BBU_14_2, mode='lines', name='BBU_14_2',
+                                 line=dict(color='#56a6ae', dash='dash')), row=1, col=4)
+        fig.update_xaxes(title_text="Slider - 1 Minute Time Interval", row=1, col=4)
+
+        # Add Volume Chart to Row 2 of subplot
+        fig.add_trace(go.Bar(x=df.index, y=df.volume, marker=dict(color='#7cadf8')), row=2, col=4)
+
+        # Add 5M Candlestick Chart
+        fig.add_trace(go.Candlestick(x=df5.index, open=df5.open, high=df5.high, low=df5.low, close=df5.close), row=1,
+                      col=3)
+        fig.add_trace(go.Scatter(x=df5.index, y=df5.SMA3, mode='lines', name='SMA3', line_color='#ff00ff'), row=1,
+                      col=3)
+        fig.add_trace(go.Scatter(x=df5.index, y=df5.SMA14, mode='lines', name='SMA14', line_color='#ff0000'), row=1,
+                      col=3)
+        fig.add_trace(
+            go.Scatter(x=df5.index, y=df5.SMA50, mode='lines', name='SMA50', line_color='#00ff00', line_width=2), row=1,
+            col=3)
+        fig.add_trace(
+            go.Scatter(x=df5.index, y=df5.SMA200, mode='lines', name='SMA200', line_color='#0000ff', line_width=3),
+            row=1, col=3)
+        fig.add_trace(go.Scatter(x=df5.index, y=df5.BBL_14_2, mode='lines', name='BBL_14_2',
+                                 line=dict(color='#56a6ae', dash='dash')), row=1, col=3)
+        fig.add_trace(go.Scatter(x=df5.index, y=df5.BBU_14_2, mode='lines', name='BBU_14_2',
+                                 line=dict(color='#56a6ae', dash='dash')), row=1, col=3)
+        fig.update_xaxes(title_text="Slider - 5 Minute Time Interval", row=1, col=3)
+        # Add Volume Chart to Row 2 of subplot
+        fig.add_trace(go.Bar(x=df5.index, y=df5.volume, marker=dict(color='#7cadf8')), row=2, col=3)
+
+        # Add 15M Candlestick Chart
+        fig.add_trace(go.Candlestick(x=df15.index, open=df15.open, high=df15.high, low=df15.low, close=df15.close),
+                      row=1, col=2)
+        fig.add_trace(go.Scatter(x=df15.index, y=df15.SMA3, mode='lines', name='SMA3', line_color='#ff00ff'), row=1,
+                      col=2)
+        fig.add_trace(go.Scatter(x=df15.index, y=df15.SMA14, mode='lines', name='SMA14', line_color='#ff0000'), row=1,
+                      col=2)
+        fig.add_trace(
+            go.Scatter(x=df15.index, y=df15.SMA50, mode='lines', name='SMA50', line_color='#00ff00', line_width=2),
+            row=1, col=2)
+        fig.add_trace(
+            go.Scatter(x=df15.index, y=df15.SMA200, mode='lines', name='SMA200', line_color='#0000ff', line_width=3),
+            row=1, col=2)
+        fig.add_trace(go.Scatter(x=df15.index, y=df15.BBL_14_2, mode='lines', name='BBL_14_2',
+                                 line=dict(color='#56a6ae', dash='dash')), row=1, col=2)
+        fig.add_trace(go.Scatter(x=df15.index, y=df15.BBU_14_2, mode='lines', name='BBU_14_2',
+                                 line=dict(color='#56a6ae', dash='dash')), row=1, col=2)
+        fig.update_xaxes(title_text="Slider - 15 Minute Time Interval", row=1, col=2)
+        # Add Volume Chart to Row 2 of subplot
+        fig.add_trace(go.Bar(x=df15.index, y=df15.volume, marker=dict(color='#7cadf8')), row=2, col=2)
+
+        # Add Day Candlestick Chart
+        fig.add_trace(go.Candlestick(x=dfD.index, open=dfD.open, high=dfD.high, low=dfD.low, close=dfD.close), row=1,
+                      col=1)
+        fig.add_trace(go.Scatter(x=dfD.index, y=dfD.SMA3_1D, mode='lines', name='SMA3_1D', line_color='#ff00ff'), row=1,
+                      col=1)
+        fig.update_xaxes(title_text="Slider - 1 Day Time Interval", row=1, col=1)
+        fig.update_xaxes(rangeslider_thickness=0.02)
+        # Add Volume Chart to Row 2 of subplot
+        fig.add_trace(go.Bar(x=dfD.index, y=dfD.volume, marker=dict(color='#7cadf8')), row=2, col=1)
+
+        # 1 Min Update the time selected zoom
+        current_time = datetime.now()
+        new_time = current_time + timedelta(minutes=1)  # inset right side by 1 ticks
+        formatted_new_time = new_time.strftime("%H:%M")  # right side of graph is current time
+        end_time_1 = datetime.strptime(formatted_new_time, '%H:%M')
+        new_time = current_time - timedelta(minutes=30)  # set range for plot
+        formatted_new_time = new_time.strftime("%H:%M")
+        start_time_1 = datetime.strptime(formatted_new_time, '%H:%M')
+        last_day = df.index[-1].date()
+        start_datetime_1 = datetime.combine(last_day, start_time_1.time())
+        end_datetime_1 = datetime.combine(last_day, end_time_1.time())
+
+        # 5 Min Update the time selected zoom to last day view
+        current_time = datetime.now()
+        new_time = current_time + timedelta(minutes=5)  # inset right side by 1 ticks
+        formatted_new_time = new_time.strftime("%H:%M")
+        end_time_5 = datetime.strptime(formatted_new_time, '%H:%M')
+        new_time = current_time - timedelta(minutes=150)  # set range for plot
+        formatted_new_time = new_time.strftime("%H:%M")
+        start_time_5 = datetime.strptime(formatted_new_time, '%H:%M')
+        last_day = df.index[-1].date()
+        start_datetime_5 = datetime.combine(last_day, start_time_5.time())
+        end_datetime_5 = datetime.combine(last_day, end_time_5.time())
+
+        # 15 Min Update the time selected zoom to last day view
+        current_time = datetime.now()
+        new_time = current_time + timedelta(minutes=15)  # inset right side by 1 ticks
+        formatted_new_time = new_time.strftime("%H:%M")
+        end_time_15 = datetime.strptime(formatted_new_time, '%H:%M')
+        # new_time = current_time - timedelta(minutes=450)                    # set range for plot
+        new_time = time(5, 0)  # set range for plot
+        formatted_new_time = new_time.strftime("%H:%M")
+        start_time_15 = datetime.strptime(formatted_new_time, '%H:%M')
+        last_day = df.index[-1].date()
+        start_datetime_15 = datetime.combine(last_day, start_time_15.time())
+        end_datetime_15 = datetime.combine(last_day, end_time_15.time())
+
+        # Set the x-axis range for each subplot
+        fig.update_xaxes(range=[start_datetime_1, end_datetime_1], row=1, col=4)  # 1 min chart
+        fig.update_xaxes(range=[start_datetime_1, end_datetime_1], row=2, col=4)  # 1 min chart volume
+        fig.update_xaxes(range=[start_datetime_5, end_datetime_5], row=1, col=3)  # 5 min chart
+        fig.update_xaxes(range=[start_datetime_5, end_datetime_5], row=2, col=3)  # 5 min chart volume
+        fig.update_xaxes(range=[start_datetime_15, end_datetime_15], row=1, col=2)  # 15 min chart
+        fig.update_xaxes(range=[start_datetime_15, end_datetime_15], row=2, col=2)  # 15 min chart volume
+
+        # fig.update_xaxes(range=[start_datetime, end_datetime], row=1, col=2)      # day - full scale default
+
+
+
+
+        HistBeginDateTimeVar = datetime.strptime(HistBeginDateTime, "%Y-%m-%d %H:%M:%S")
+        twenty_day_prior = HistBeginDateTimeVar - timedelta(days=30)
+        filtered_df_1Day = dfD.loc[twenty_day_prior:HistEndDateTime]
+        fig.update_xaxes(range=[twenty_day_prior, HistEndDateTime], row=1, col=1)
+
+        # get y range - minutes
+        filtered_df_1min = df.loc[start_datetime_15:end_datetime_15]
+        Dyn_Ymin = math.floor(filtered_df_1min['low'].min() * 0.995)
+        Dyn_Ymax = math.ceil(filtered_df_1min['high'].max() * 1.005)
+        # get y range - day
+        Dyn_YminD = (filtered_df_1Day['low'].min() * 0.995)
+        Dyn_YmaxD = (filtered_df_1Day['high'].max() * 1.005)
+        if Dyn_Ymax > Dyn_YmaxD:
+            Dyn_YmaxD = Dyn_Ymax
+        delta = round(Dyn_YmaxD - Dyn_YminD)
+        tick1 = delta / 50
+        tick2 = round(tick1)
+        Dyn_Ymin2 = round(Dyn_YminD)
+        Dyn_Ymax2 = round(Dyn_YmaxD)
+
+        fig.update_yaxes(range=[Dyn_Ymin2, Dyn_Ymax2], side='right', row=1, col=1, dtick=tick2)  # 1 Day
+        fig.update_yaxes(range=[Dyn_Ymin, Dyn_Ymax], side='right', row=1, col=2, dtick=1)  # 15 min
+        fig.update_yaxes(range=[Dyn_Ymin, Dyn_Ymax], side='right', row=1, col=3, dtick=1)  # 5 min
+        fig.update_yaxes(range=[Dyn_Ymin, Dyn_Ymax], side='right', row=1, col=4, dtick=1)  # 1 min
+
+        fig.update_yaxes(color='#000000', range=[0, 6000000], row=2, col=2)
+        fig.update_yaxes(color='#000000', range=[0, 2000000], row=2, col=3)
+        fig.update_yaxes(color='#000000', range=[0, 500000], row=2, col=4)
+
+        fig.update_xaxes(gridcolor='lightgrey', row=1, col=1, dtick=24 * 60 * 60 * 1000,
+                         tickformat='%m-%d %H:%M')  # 1 Day graph ticks
+        fig.update_xaxes(gridcolor='lightgrey', row=1, col=2, dtick=15 * 60 * 1000,
+                         tickformat='%m-%d %H:%M')  # 15 min graph ticks
+        fig.update_xaxes(gridcolor='lightgrey', row=1, col=3, dtick=5 * 60 * 1000,
+                         tickformat='%m-%d %H:%M')  # 5 min graph ticks
+        fig.update_xaxes(gridcolor='lightgrey', row=1, col=4, dtick=1 * 60 * 1000,
+                         tickformat='%m-%d %H:%M')  # 1 min graph ticks
+
+        '''
+        #New Test
+        fig_json = pio.to_json(fig)
+        # Option 2: Store in a file
+        with open("fig_data.json", "w") as f:
+            f.write(fig_json)
+        '''
+
+        # Update traces name in legend (if on)
+        fig.update_traces(name=Ticker, selector=dict(type='candlestick'))
+
+        fig.update_layout(
+            title=dict(
+                text=Ticker,
+                font=dict(
+                    family="Arial",
+                    size=32,
+                    color="black"
+                )
+            ),
+            xaxis1_rangeslider_visible=True,
+            xaxis2_rangeslider_visible=True,
+            xaxis_rangeslider_thickness=0.02,
+            height=1280,
+            width=2500,
+            showlegend=False
+        )
+
+        #fig.update_layout(yaxis=dict(tickmode='linear', tick0=Dyn_Ymin, dtick=1))
+        # fig.update_layout(xaxis=dict(tickmode='linear', tick0=0.25, dtick=1))
+
+        # Prototype - Add Special lines, trends, key levels, BUY indications etc.
+        '''
+        fig.update_layout(
+            title='NVDA Analysis',
+            yaxis_title='NVDA Price [USD]',
+            shapes=[dict(
+                x0='2023-12-22 10:00:00', x1='2023-12-22 10:00:00', y0=0.0, y1=1, xref='x', yref='paper',
+                line_width=1)],
+            annotations=[dict(
+                x='2023-12-22 10:00:00', y=0.0, xref='x', yref='paper',
+                showarrow=False, xanchor='left', text='Buy')],
+            showlegend=False  # Hide legend for better visualization
+        )
+        '''
+
+        return fig
+
+    webbrowser.open_new("http://127.0.0.1:8050/")
+    app.run_server(debug=True )
+
+
+#*************************************************************
+def Chart_Plot_HistoAnalysis(Ticker, HistBeginDateTime, HistEndDateTime, df, df5, df15, dfD):
+    global fig
+
+    # Create subplots
+    fig = make_subplots(rows=2, cols=4, subplot_titles=[ '1 Day', '15 Minute', '5 Minute', '1 Minute',
+                        '', '', '', ''], row_width=[0.15, 0.65], shared_yaxes=False, vertical_spacing=0.17,
+                        horizontal_spacing=0.02, print_grid=False, )
+    #pyo.plot(fig, filename='your_plot.html',  auto_open=False)
+
+    # Add 1M Candlestick Chart
+    fig.add_trace(go.Candlestick(x=df.index, open=df.open, high=df.high, low=df.low, close=df.close), row=1, col=4)
+    fig.add_trace(go.Scatter(x=df.index, y=df.SMA3, mode='lines', name='SMA3', line_color='#ff00ff'), row=1, col=4)
+    fig.add_trace(go.Scatter(x=df.index, y=df.SMA14, mode='lines', name='SMA14', line_color='#ff0000'), row=1, col=4)
+    fig.add_trace(go.Scatter(x=df.index, y=df.SMA50, mode='lines', name='SMA50', line_color='#00ff00', line_width=2),row=1, col=4)
+    fig.add_trace(go.Scatter(x=df.index, y=df.SMA200, mode='lines', name='SMA200', line_color='#0000ff', line_width=3), row=1, col=4)
+    fig.add_trace(go.Scatter(x=df.index, y=df.BBL_14_2, mode='lines', name='BBL_14_2', line=dict(color='#816d03', dash='dash')), row=1, col=4)
+    fig.add_trace( go.Scatter(x=df.index, y=df.BBU_14_2, mode='lines', name='BBU_14_2',line=dict(color='#816d03',dash='dash')),row=1, col=4)
+    fig.update_xaxes(title_text="Slider - 1 Minute Time Interval", row=1, col=4)
+    # Add Volume Chart to Row 2 of subplot
+    fig.add_trace(go.Bar(x=df.index, y=df.volume, marker=dict(color='#7cadf8')), row=2, col=4)
+
+    # Add 5M Candlestick Chart
+    fig.add_trace(go.Candlestick(x=df5.index, open=df5.open, high=df5.high, low=df5.low, close=df5.close), row=1, col=3)
+    fig.add_trace(go.Scatter(x=df5.index, y=df5.SMA3, mode='lines', name='SMA3', line_color='#ff00ff'), row=1, col=3)
+    fig.add_trace(go.Scatter(x=df5.index, y=df5.SMA14, mode='lines', name='SMA14', line_color='#ff0000'), row=1, col=3)
+    fig.add_trace(go.Scatter(x=df5.index, y=df5.SMA50, mode='lines', name='SMA50', line_color='#00ff00', line_width=2),row=1, col=3)
+    fig.add_trace( go.Scatter(x=df5.index, y=df5.SMA200, mode='lines', name='SMA200', line_color='#0000ff', line_width=3), row=1, col=3)
+    fig.add_trace( go.Scatter(x=df5.index, y=df5.BBL_14_2, mode='lines', name='BBL_14_2', line=dict(color='#816d03', dash='dash')),row=1, col=3)
+    fig.add_trace(go.Scatter(x=df5.index, y=df5.BBU_14_2, mode='lines', name='BBU_14_2', line=dict(color='#816d03', dash='dash')), row=1, col=3)
+    fig.update_xaxes(title_text="Slider - 5 Minute Time Interval", row=1, col=3)
+    # Add Volume Chart to Row 2 of subplot
+    fig.add_trace(go.Bar(x=df5.index, y=df5.volume, marker=dict(color='#7cadf8')), row=2, col=3)
+
+    # Add 15M Candlestick Chart
+    fig.add_trace(go.Candlestick(x=df15.index, open=df15.open, high=df15.high, low=df15.low, close=df15.close), row=1, col=2)
+    fig.add_trace(go.Scatter(x=df15.index, y=df15.SMA3, mode='lines', name='SMA3', line_color='#ff00ff'), row=1, col=2)
+    fig.add_trace(go.Scatter(x=df15.index, y=df15.SMA14, mode='lines', name='SMA14', line_color='#ff0000'), row=1, col=2)
+    fig.add_trace( go.Scatter(x=df15.index, y=df15.SMA50, mode='lines', name='SMA50', line_color='#00ff00', line_width=2),row=1,col=2)
+    fig.add_trace(go.Scatter(x=df15.index, y=df15.SMA200, mode='lines', name='SMA200', line_color='#0000ff', line_width=3), row=1, col=2)
+    fig.add_trace(go.Scatter(x=df15.index, y=df15.BBL_14_2, mode='lines', name='BBL_14_2', line=dict(color='#816d03', dash='dash')), row=1, col=2)
+    fig.add_trace(go.Scatter(x=df15.index, y=df15.BBU_14_2, mode='lines', name='BBU_14_2', line=dict(color='#816d03', dash='dash')), row=1, col=2)
+    fig.update_xaxes(title_text="Slider - 15 Minute Time Interval", row=1, col=2)
+    # Add Volume Chart to Row 2 of subplot
+    fig.add_trace(go.Bar(x=df15.index, y=df15.volume, marker=dict(color='#7cadf8')), row=2, col=2)
+
+    # Add Day Candlestick Chart
+    fig.add_trace(go.Candlestick(x=dfD.index, open=dfD.open, high=dfD.high, low=dfD.low, close=dfD.close), row=1, col=1)
+    fig.add_trace(go.Scatter(x=dfD.index, y=dfD.SMA3_1D, mode='lines', name='SMA3_1D', line_color='#ff00ff'), row=1, col=1)
+    #fig.add_trace(go.Scatter(x=dfD.index, y=dfD.SMA14_1D, mode='lines', name='SMA14_1D', line_color='#ff0000'), row=1,col=1)
+    #fig.add_trace(go.Scatter(x=dfD.index, y=dfD.BBL_14_2, mode='lines', name='BBL_14_2', line=dict(color='#816d03', dash='dash')), row=1, col=1)
+    #fig.add_trace(go.Scatter(x=dfD.index, y=dfD.BBU_14_2, mode='lines', name='BBU_14_2', line=dict(color='#816d03', dash='dash')), row=1, col=1)
+
+    fig.update_xaxes(title_text="Slider - 1 Day Time Interval", row=1, col=1)
+    fig.update_xaxes(rangeslider_thickness=0.02)
+    # Add Volume Chart to Row 2 of subplot
+    fig.add_trace(go.Bar(x=dfD.index, y=dfD.volume, marker=dict(color='#7cadf8')), row=2, col=1)
+
+    # Set the x-axis range for each subplot
+    fig.update_xaxes(range=[HistBeginDateTime, HistEndDateTime], row=1, col=4)  # 1 min chart
+    fig.update_xaxes(range=[HistBeginDateTime, HistEndDateTime], row=2, col=4)  # 1 min chart volume
+    fig.update_xaxes(range=[HistBeginDateTime, HistEndDateTime], row=1, col=3)  # 5 min chart
+    fig.update_xaxes(range=[HistBeginDateTime, HistEndDateTime], row=2, col=3)  # 5 min chart volume
+    fig.update_xaxes(range=[HistBeginDateTime, HistEndDateTime], row=1, col=2)  # 15 min chart
+    fig.update_xaxes(range=[HistBeginDateTime, HistEndDateTime], row=2, col=2)  # 15 min chart volume
+
+
+    #nominal time interval
+    filtered_df_1min = df15.loc[HistBeginDateTime:HistEndDateTime]
+    #add a day in case of single day interval
+    HistBeginDateTimeVar = datetime.strptime(HistBeginDateTime, "%Y-%m-%d %H:%M:%S")
+    day_prior = HistBeginDateTimeVar - timedelta(days=1)
+    fig.update_xaxes(range=[day_prior, HistEndDateTime], row=1, col=1)
+
+    #get y ranges
+    Dyn_Ymin = (filtered_df_1min['low'].min() * 0.995)
+    Dyn_Ymax = (filtered_df_1min['high'].max() * 1.005)
+    delta = Dyn_Ymax - Dyn_Ymin
+    tick1 = delta/40
+    tick2 = round(tick1)
+    Dyn_Ymin2 = round(Dyn_Ymin)
+    Dyn_Ymax2 = Dyn_Ymin + 40*tick2
+
+    fig.update_yaxes(range=[Dyn_Ymin2, Dyn_Ymax2], side='right', row=1, col=1, dtick=tick2)
+    fig.update_yaxes(range=[Dyn_Ymin2, Dyn_Ymax2], side='right', row=1, col=2, dtick=tick2)
+    fig.update_yaxes(range=[Dyn_Ymin2, Dyn_Ymax2], side='right', row=1, col=3, dtick=tick2)
+    fig.update_yaxes(range=[Dyn_Ymin2, Dyn_Ymax2], side='right', row=1, col=4, dtick=tick2)
+
+    PriorDayVolume = dfD.iloc[-1].volume
+    DayVol1 = PriorDayVolume * 0.01
+    DayVol5 = PriorDayVolume * 0.033
+    DayVol15 = PriorDayVolume * 0.1
+
+    fig.update_yaxes(color='#000000', range=[0, DayVol15], row=2, col=2)  # 15 /day
+    fig.update_yaxes(color='#000000', range=[0, DayVol5], row=2, col=3)  # 5 /day
+    fig.update_yaxes(color='#000000', range=[0, DayVol1], row=2, col=4)  # 1 /day
+
+    HistBeginDateTime_str = HistBeginDateTime
+    HistEndDateTime_str = HistEndDateTime
+    HistBeginDateTime = datetime.strptime(HistBeginDateTime_str, "%Y-%m-%d %H:%M:%S")
+    HistEndDateTime = datetime.strptime(HistEndDateTime_str, "%Y-%m-%d %H:%M:%S")
+    time_difference = HistEndDateTime - HistBeginDateTime
+    rounded_seconds = round(time_difference.total_seconds() / 3600) * 3600
+    time_difference_in_milliseconds = rounded_seconds * 1000
+
+    dtickvalmsec = time_difference_in_milliseconds / 40
+
+    fig.update_xaxes(gridcolor='lightgrey', row=1, col=1, dtick=24 * 60 * 60 * 1000,
+                     tickformat='%m-%d-%y')  # 1 Day graph ticks
+    fig.update_xaxes(gridcolor='lightgrey', row=1, col=2,
+                     range=[HistBeginDateTime, HistEndDateTime],
+                     dtick=dtickvalmsec, tickformat='%m-%d %H:%M')  # 15 min graph ticks
+    fig.update_xaxes(gridcolor='lightgrey', row=1, col=3, dtick=dtickvalmsec,
+                     tickformat='%m-%d %H:%M')  # 5 min graph ticks
+    fig.update_xaxes(gridcolor='lightgrey', row=1, col=4, dtick=dtickvalmsec, tickformat='%m-%d %H:%M')
+
+    #fig.update_xaxes(gridcolor='lightgrey', row=1, col=1, dtick=24 * 60 * 60 * 1000, tickformat='%m-%d %H:%M')    # 1 Day graph ticks
+    #fig.update_xaxes(gridcolor='lightgrey', row=1, col=2, dtick = 15*60*1000, tickformat='%m-%d %H:%M')           # 15 min graph ticks
+    #fig.update_xaxes(gridcolor='lightgrey', row=1, col=3, dtick = 15*60*1000, tickformat='%m-%d %H:%M')           # 5 min graph ticks
+    #fig.update_xaxes(gridcolor='lightgrey', row=1, col=4, dtick= 15*60*1000, tickformat='%m-%d %H:%M')            # 1 min graph ticks
+
+
+    # Update traces name in legend (if on)
+    fig.update_traces(name=Ticker, selector=dict(type='candlestick'))
+
+    #fig.update_layout(title_text=Ticker, xaxis1_rangeslider_visible=True, xaxis2_rangeslider_visible=True,
+    #                  xaxis_rangeslider_thickness=0.02, showlegend=False)
+
+    fig.update_layout(
+        title=dict(
+            text=Ticker,
+            font=dict(
+                family="Arial",
+                size=32,
+                color="black"
+            )
+        ),
+        xaxis1_rangeslider_visible=True,
+        xaxis2_rangeslider_visible=True,
+        xaxis_rangeslider_thickness=0.02,
+        height=1280,
+        width=2500,
+        showlegend=False
+    )
+
+    #fig.update_layout(yaxis=dict(tickmode='linear', tick0=Dyn_Ymin, dtick=2))
+
+
+    # Prototype - Add Special lines, trends, key levels, BUY indications etc.
+    '''
+    fig.update_layout(
+        title='Stock Analysis',
+        yaxis_title='Stock Price [USD]',
+        shapes=[dict(
+            x0='2023-12-22 10:00:00', x1='2023-12-22 10:00:00', y0=0.0, y1=1, xref='x', yref='paper',
+            line_width=1)],
+        annotations=[dict(
+            x='2023-12-22 10:00:00', y=0.0, xref='x', yref='paper',
+            showarrow=False, xanchor='left', text='Buy')],
+        showlegend=False  # Hide legend for better visualization
+    )
+
+    '''
+
+    pyo.plot(fig, filename='DP_Stock_PLOT.html', auto_open=True)
+
+
+
+
+
+#*************************************************************
+def DebugPrints():
+
+    if True:
+        print('1 min bars ')
+        value = stock_data_1.open()
+        print(f"open: {value:.2f}")
+        value = stock_data_1.high()
+        print(f"high: {value:.2f}")
+        value = stock_data_1.low()
+        print(f"low: {value:.2f}")
+        value = stock_data_1.close()
+        print(f"close: {value:.2f}")
+        value = stock_data_1.vwap()
+        print(f"vwap: {value:.2f}")
+        value = stock_data_1.volume()
+        print(f"volume: {value:.2f}")
+        value = stock_data_1.SMA3()
+        print(f"SMA3: {value:.2f}")
+        value = stock_data_1.SL_SMA3()
+        print(f"SL_SMA3: {value:.2f}")
+        value = stock_data_1.SMA14()
+        print(f"SMA14: {value:.2f}")
+        value = stock_data_1.SL_SMA14()
+        print(f"SL_SMA14: {value:.2f}")
+
+        print('5 min bars ')
+        value = stock_data_5.open()
+        print(f"open: {value:.2f}")
+        value = stock_data_5.high()
+        print(f"high: {value:.2f}")
+        value = stock_data_5.low()
+        print(f"low: {value:.2f}")
+        value = stock_data_5.close()
+        print(f"close: {value:.2f}")
+        value = stock_data_5.vwap()
+        print(f"vwap: {value:.2f}")
+        value = stock_data_5.volume()
+        print(f"volume: {value:.2f}")
+        value = stock_data_5.SMA3()
+        print(f"SMA3: {value:.2f}")
+        value = stock_data_5.SL_SMA3()
+        print(f"SL_SMA3: {value:.2f}")
+        value = stock_data_5.SMA14()
+        print(f"SMA14: {value:.2f}")
+        value = stock_data_5.SL_SMA14()
+        print(f"SL_SMA14: {value:.2f}")
+
+        print('15 min bars ')
+        value = stock_data_15.open()
+        print(f"open: {value:.2f}")
+        value = stock_data_15.high()
+        print(f"high: {value:.2f}")
+        value = stock_data_15.low()
+        print(f"low: {value:.2f}")
+        value = stock_data_15.close()
+        print(f"close: {value:.2f}")
+        value = stock_data_15.vwap()
+        print(f"vwap: {value:.2f}")
+        value = stock_data_15.volume()
+        print(f"volume: {value:.2f}")
+        value = stock_data_15.SMA3()
+        print(f"SMA3: {value:.2f}")
+        value = stock_data_15.SL_SMA3()
+        print(f"SL_SMA3: {value:.2f}")
+        value = stock_data_15.SMA14()
+        print(f"SMA14: {value:.2f}")
+        value = stock_data_15.SL_SMA14()
+        print(f"SL_SMA14: {value:.2f}")
+
+        print(' ')
+
+
+

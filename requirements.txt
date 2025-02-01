@@ -1,0 +1,8 @@
+polygon
+polygon-api-client
+dash
+dash_bootstrap_components
+pandas
+plotly
+yfinance
+pandas_ta
