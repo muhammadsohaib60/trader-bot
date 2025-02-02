@@ -14,7 +14,7 @@ import os
 load_dotenv()
 
 # Your Paid Polygon.io API Key
-API_KEY = os.getenv("POLYGON_API_KEY")
+API_KEY = os.getenv("EQkl8zAWXKa434UJKkhUjNChHpW3p9_a")
 polygon_client = RESTClient(API_KEY)
 
 # Available stock tickers
