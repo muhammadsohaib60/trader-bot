@@ -3,9 +3,7 @@ from dash import dcc, html, Input, Output
 import plotly.graph_objects as go
 import pandas as pd
 import pandas_ta as ta
-#from polygon import RESTClient
-from polygon.rest import RESTClient
-
+from polygon import RESTClient
 from datetime import timedelta
 import datetime
 from dotenv import load_dotenv
@@ -14,7 +12,7 @@ import os
 load_dotenv()
 
 # Your Paid Polygon.io API Key
-API_KEY = os.getenv("EQkl8zAWXKa434UJKkhUjNChHpW3p9_a")
+API_KEY = os.getenv("POLYGON_API_KEY")
 polygon_client = RESTClient(API_KEY)
 
 # Available stock tickers
