@@ -8,6 +8,7 @@ from datetime import timedelta
 import datetime
 from dotenv import load_dotenv
 import os
+import numpy as np
 
 load_dotenv()
 
@@ -136,7 +137,7 @@ DEFAULT_TICKER = "NVDA"  # Or any ticker you prefer
 DEFAULT_TIMEFRAME = "1 Hour"
 
 # Dash App
-app = dash.Dash(__name__, suppress_callback_exceptions=True)  # Important!
+app = dash.Dash(__name__, suppress_callback_exceptions=True) 
 
 app.layout = html.Div([
     html.H1("Stock Analysis Dashboard"),
@@ -169,7 +170,6 @@ def toggle_ticker_input(selected_ticker):
         return {"display": "none"}
 
 
-
 @app.callback(
     Output("charts-container", "children"),
     Output("error-message", "children"),
@@ -177,17 +177,17 @@ def toggle_ticker_input(selected_ticker):
     Input("custom-ticker-input", "value")
 )
 def update_charts_container(selected_ticker, custom_ticker):
-
     ticker = custom_ticker.upper() if selected_ticker == "custom" and custom_ticker else selected_ticker.upper() if selected_ticker != "custom" else DEFAULT_TICKER
     charts = []
     error_message = ""
+
     for timeframe_label, timeframe_value in TIMEFRAMES.items():
         try:
             df = fetch_stock_data(ticker, timeframe_value, polygon_client)
+
             if df.empty:
                 fig = go.Figure(data=[go.Scatter(x=[], y=[])], layout=go.Layout(title=f"No data for {ticker} ({timeframe_label})"))
                 error_message += f"No data found for {ticker} with the selected timeframe. "
-
             else:
                 df = calculate_indicators(df)
                 if df.empty:
@@ -196,38 +196,48 @@ def update_charts_container(selected_ticker, custom_ticker):
                 else:
                     fig = go.Figure()
 
-                    # ... (Candlestick and indicator plotting - same as before)
-                    fig.add_trace(go.Candlestick(
-                        x=df["date"], open=df["open"], high=df["high"], low=df["low"], close=df["close"], name="Candlestick"
-                    ))
+                    if timeframe_value in ["week","month", "quarter", "year"]:
+                        fig.add_trace(go.Candlestick(
+                            x=df["date"], open=df["open"], high=df["high"], low=df["low"], close=df["close"], name="Candlestick"
+                        ))
 
-                    # Moving Averages (only add if they exist in the DataFrame)
-                    if "EMA_14" in df.columns:
-                        fig.add_trace(go.Scatter(x=df["date"], y=df["EMA_14"], mode="lines", name="EMA 14"))
-                    if "EMA_50" in df.columns:
-                        fig.add_trace(go.Scatter(x=df["date"], y=df["EMA_50"], mode="lines", name="EMA 50"))
-                    if "EMA_200" in df.columns:
-                        fig.add_trace(go.Scatter(x=df["date"], y=df["EMA_200"], mode="lines", name="EMA 200"))
+                        for indicator in ["EMA_14", "EMA_50", "EMA_200", "BB_upper", "BB_lower"]:
+                            if indicator in df.columns:
+                                fig.add_trace(go.Scatter(
+                                    x=df["date"], y=df[indicator], mode="lines", name=indicator
+                                ))
 
-                    # Bollinger Bands (only add if they exist)
-                    if "BB_upper" in df.columns:
-                        fig.add_trace(go.Scatter(x=df["date"], y=df["BB_upper"], mode="lines", name="Bollinger Upper", line=dict(dash="dot")))
-                    if "BB_lower" in df.columns:
-                        fig.add_trace(go.Scatter(x=df["date"], y=df["BB_lower"], mode="lines", name="Bollinger Lower", line=dict(dash="dot")))
+                    else:  # Daily, weekly, etc.
+                        df = df.tail(20)
+                        fig.add_trace(go.Candlestick(
+                            x=df["date"], open=df["open"], high=df["high"], low=df["low"], close=df["close"], name="Candlestick"
+                        ))
 
-                    fig.update_layout(title=f"{ticker} Stock Analysis ({timeframe_label})", xaxis_title="Date", yaxis_title="Price")
+                        for indicator in ["EMA_14", "EMA_50", "EMA_200", "BB_upper", "BB_lower"]:
+                            if indicator in df.columns:
+                                fig.add_trace(go.Scatter(
+                                    x=df["date"], y=df[indicator], mode="lines", name=indicator
+                                ))
 
+                        fig.update_layout(
+                            title=f"{ticker} Stock Analysis ({timeframe_label})",
+                            xaxis_title="Date",
+                            yaxis_title="Price",
+                            xaxis_range=[df['date'].iloc[0], df['date'].iloc[-1]]
+                        )
 
-            chart = html.Div(dcc.Graph(id=f"stock-chart-{ticker}-{timeframe_value}", figure=fig), style={"width": "48%", "display": "inline-block"}) # Adjust width
+                    chart = html.Div(dcc.Graph(id=f"stock-chart-{ticker}-{timeframe_value}", figure=fig), style={"width": "48%", "display": "inline-block"})
 
-            charts.append(chart)
+                    charts.append(chart)
 
         except Exception as e:
-            print(f"Error for {timeframe_label}: {e}")
+            print(f"Error for {timeframe_label}: {e}")  # Print specific error
             error_message += f"An error occurred for {timeframe_label}: {e}. "
+            fig = go.Figure(data=[go.Scatter(x=[], y=[])], layout=go.Layout(title=f"Error: {timeframe_label}")) # Create a blank figure with an error message
+            chart = html.Div(dcc.Graph(id=f"stock-chart-{ticker}-{timeframe_value}", figure=fig), style={"width": "48%", "display": "inline-block"})
+            charts.append(chart) # Append the blank chart to avoid breaking the layout
 
     return charts, error_message
-
 
 if __name__ == "__main__":
     app.run_server(debug=True)
