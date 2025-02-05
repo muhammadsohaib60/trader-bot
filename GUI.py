@@ -32,9 +32,12 @@ TIMEFRAMES = {
     "1 Year": "year",
 }
 
-def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=20):  # Added candle_count as a parameter
-    """Fetch and aggregate stock data with dynamic date range and limited data points."""
+import pandas as pd
+import datetime
+from datetime import timedelta
 
+def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=20):
+    """Fetch stock data, handle API errors, and preprocess data."""
     end_date = datetime.datetime.now(datetime.UTC)
 
     if timeframe in ["week", "month", "quarter", "year"]:
@@ -48,7 +51,7 @@ def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=20):  # Add
             start_date = end_date - timedelta(days=365 * 10)
     elif timeframe in ["second", "minute", "5min", "15min", "hour"]:
         if timeframe == "second":
-            candle_count = 60 * 60
+            candle_count = 60 * 60  # 1 hour of seconds
             lookback = timedelta(seconds=candle_count)
         elif timeframe == "minute":
             lookback = timedelta(minutes=candle_count)
@@ -66,16 +69,16 @@ def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=20):  # Add
     current_date = start_date
 
     while current_date <= end_date:
-        next_date = min(current_date + timedelta(days=365), end_date)  # Polygon API limit
+        next_date = min(current_date + timedelta(days=365), end_date)
 
         try:
             response = polygon_client.get_aggs(
                 ticker=ticker,
                 multiplier=1,
-                timespan="minute" if timeframe in ["5min", "15min"] or timeframe == "second" else timeframe,  # Fetch 1-min or 1-sec for aggregation
+                timespan="minute" if timeframe in ["5min", "15min"] or timeframe == "second" else timeframe,
                 from_=current_date.strftime("%Y-%m-%d"),
                 to=next_date.strftime("%Y-%m-%d"),
-                limit=5000  # Important: Limit for each request
+                limit=5000
             )
 
             if not response:
@@ -96,12 +99,11 @@ def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=20):  # Add
             ]
             all_data.extend(data)
 
-        except Exception as e:
-            print(f"❌ Error fetching {ticker} ({timeframe}) from {current_date} to {next_date}: {e}")
-            current_date = next_date + timedelta(days=1)
-            continue
+        except Exception as api_error:
+            print(f"❌ API Error fetching {ticker} ({timeframe}): {api_error}")
+            return pd.DataFrame()
 
-        current_date = next_date + timedelta(days=1)  # Move to the next day
+        current_date = next_date + timedelta(days=1)
 
     df = pd.DataFrame(all_data)
 
@@ -114,15 +116,19 @@ def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=20):  # Add
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
+    df = df.dropna(subset=['close'])
+
+    if df.empty:
+        return df
+
+    df['close'] = df['close'].ffill()
+
     if timeframe == "5min":
-        df = df.resample("5min", on='date').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'})
-        df = df.reset_index()
+        df = df.set_index('date').resample("5min").agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).reset_index()
     elif timeframe == "15min":
-        df = df.resample("15min", on='date').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'})
-        df = df.reset_index()
-    elif timeframe == "second": # Added aggregation for second
-        df = df.resample("1S", on='date').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'})
-        df = df.reset_index()
+        df = df.set_index('date').resample("15min").agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).reset_index()
+    elif timeframe == "second":
+        df = df.set_index('date').resample("1S").agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).reset_index()
 
     if timeframe in ["second", "minute", "5min", "15min", "hour"]:
         if not df.empty:
@@ -130,34 +136,41 @@ def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=20):  # Add
 
     return df
 
-def calculate_indicators(df):
-    """Calculate indicators with improved error handling."""
-    if df.empty:
-        print("⚠️ DataFrame is empty. Cannot calculate indicators.")
-        return df  # Return the empty DataFrame
 
-    # Check for NaNs in 'close' before calculating indicators
+def calculate_indicators(df):
+    """Calculate indicators with data density check for Bollinger Bands."""
+    if df.empty:
+        return df
+
     if df['close'].isnull().any():
         print("⚠️ NaN values found in 'close' column. Cannot calculate indicators.")
-        print(df) # Print the df to see where are the NaN values
-        return df  # Return the DataFrame without indicator calculation
+        return df
 
     try:
         df["EMA_14"] = ta.ema(df["close"], length=14)
         df["EMA_50"] = ta.ema(df["close"], length=50)
         df["EMA_200"] = ta.ema(df["close"], length=200)
 
+        if len(df) < 20:  # Check data density for Bollinger Bands
+            print("⚠️ Insufficient data for Bollinger Band calculation.")
+            df["BB_upper"] = np.nan
+            df["BB_lower"] = np.nan
+            return df
+
         bb = ta.bbands(df["close"], length=14, std=2)
 
-        if bb is None: # Check if bb is None
-            print("⚠️ ta.bbands returned None. Cannot calculate Bollinger Bands.")
-            return df # Return the DataFrame without BB calculation
-
-        df["BB_upper"] = bb["BBU_14_2.0"]
-        df["BB_lower"] = bb["BBL_14_2.0"]
+        if bb is not None:
+            df["BB_upper"] = bb["BBU_14_2.0"]
+            df["BB_lower"] = bb["BBL_14_2.0"]
+        else:
+            print("⚠️ ta.bbands returned None. Initializing BB columns with NaN.")
+            df["BB_upper"] = np.nan
+            df["BB_lower"] = np.nan
 
     except Exception as e:
         print(f"❌ Error calculating indicators: {e}")
+        df["BB_upper"] = np.nan
+        df["BB_lower"] = np.nan
     return df
 
 
@@ -197,7 +210,6 @@ def toggle_ticker_input(selected_ticker):
     else:
         return {"display": "none"}
 
-
 @app.callback(
     Output("charts-container", "children"),
     Output("error-message", "children"),
@@ -214,8 +226,8 @@ def update_charts_container(selected_ticker, custom_ticker):
             df = fetch_stock_data(ticker, timeframe_value, polygon_client)
 
             if df.empty:
-                fig = go.Figure(data=[go.Scatter(x=[], y=[])], layout=go.Layout(title=f"No data for {ticker} ({timeframe_label})"))
-                error_message += f"No data found for {ticker} with the selected timeframe. "
+                fig = go.Figure(data=[go.Scatter(x=[], y=[])], layout=go.Layout(title=f"No data or API error for {ticker} ({timeframe_label})"))
+                error_message += f"No data found or API error for {ticker} ({timeframe_label}). "
             else:
                 df = calculate_indicators(df)
                 if df.empty:
@@ -233,6 +245,8 @@ def update_charts_container(selected_ticker, custom_ticker):
                             fig.add_trace(go.Scatter(
                                 x=df["date"], y=df[indicator], mode="lines", name=indicator
                             ))
+                        elif indicator == "BB_upper" or indicator == "BB_lower":
+                            print(f"Indicator {indicator} not found. Skipping.")
 
                     fig.update_layout(
                         title=f"{ticker} Stock Analysis ({timeframe_label})",
@@ -240,19 +254,19 @@ def update_charts_container(selected_ticker, custom_ticker):
                         yaxis_title="Price"
                     )
 
-                chart = html.Div(
-                    dcc.Graph(id=f"stock-chart-{ticker}-{timeframe_value}", figure=fig),
-                    style={
-                        "width": "24%",  # 25% for 4 charts per row (adjust as needed)
-                        "display": "inline-block",
-                        "margin": "5px",  # Add some margin between charts
-                    },
-                )
-                charts.append(chart)
+                    chart = html.Div(
+                        dcc.Graph(id=f"stock-chart-{ticker}-{timeframe_value}", figure=fig),
+                        style={
+                            "width": "24%",
+                            "display": "inline-block",
+                            "margin": "5px",
+                        },
+                    )
+                    charts.append(chart)
 
-        except Exception as e:
-            print(f"Error for {timeframe_label}: {e}")
-            error_message += f"An error occurred for {timeframe_label}: {e}. "
+        except Exception as e:  # Catch any other exceptions during chart creation
+            print(f"❌ Chart creation error: {e}")
+            error_message += f"An error occurred during chart creation: {e}. "
             fig = go.Figure(data=[go.Scatter(x=[], y=[])], layout=go.Layout(title=f"Error: {timeframe_label}"))
             chart = html.Div(dcc.Graph(id=f"stock-chart-{ticker}-{timeframe_value}", figure=fig), style={"width": "24%", "display": "inline-block", "margin": "5px"})
             charts.append(chart)
