@@ -19,137 +19,151 @@ polygon_client = RESTClient(API_KEY)
 # Available stock tickers
 TICKERS = ["NVDA", "SMCI", "TEM", "GOOG", "TSLA", "AMZN", "META", "ARM", "AVGO", "MRVL", "PLTR", "QCOM", "TSM", "ASML", "MU", "AAPL", "MSFT", "WMT", "RGTI", "QUBT", "SOUN"]
 
-# Timeframe options (including the new ones)
+# Timeframe options
+# First keep the original timeframes as we want to display them
 TIMEFRAMES = {
-    "10 second": "second",  # Added 10-second timeframe
+    "1 Sec": "1sec",
+    "10 Sec": "10sec", 
     "1 Min": "minute",
-    "5 Min": "5min",  
-    "15 Min": "15min", 
+    "5 Min": "5min",
+    "15 Min": "15min",
     "1 Hour": "hour",
-    "4 Hour": "4hour",  # Corrected 4-hour timeframe
+    "4 Hour": "4hour",
     "1 Day": "day",
     "1 Week": "week",
     "1 Month": "month",
+    "1 Quarter": "quarter",
+    "1 Year": "year"
 }
 
-#***************************************************************************************************************
-def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=200):  # Added candle_count as a parameter
+def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=200):
     """Fetch and aggregate stock data with dynamic date range and limited data points."""
+    end_date = datetime.datetime.now(datetime.UTC)
 
-    end_date = datetime.datetime.now(datetime.UTC) 
+    # Map our timeframes to the smallest Polygon.io timeframe we need for accurate aggregation
+    base_timeframe_mapping = {
+        "1sec": "second",
+        "10sec": "second",
+        "minute": "minute",
+        "5min": "minute",
+        "15min": "minute",
+        "hour": "minute",
+        "4hour": "hour",
+        "day": "day",
+        "week": "day",
+        "month": "day",
+        "quarter": "day",
+        "year": "day"
+    }
 
-    if timeframe in ["day", "week", "month", "quarter", "year"]:
-        if timeframe == "day":
-            start_date = end_date - timedelta(days=candle_count * 10)
-        elif timeframe == "week":
-            start_date = end_date - timedelta(days=candle_count * 8)
-        elif timeframe == "month":
-            start_date = end_date - timedelta(days=candle_count * 33)
-        elif timeframe == "quarter":
-            start_date = end_date - timedelta(days=candle_count * 365 * 0.25)
-        elif timeframe == "year":
-            start_date = end_date - timedelta(days=365)
+    # Calculate appropriate lookback based on the timeframe
+    lookback_multipliers = {
+        "1sec": 1,
+        "10sec": 10,
+        "minute": 1,
+        "5min": 5,
+        "15min": 15,
+        "hour": 60,
+        "4hour": 240,
+        "day": 1,
+        "week": 7,
+        "month": 30,
+        "quarter": 90,
+        "year": 365
+    }
 
-    elif timeframe in ["second", "minute", "5min", "15min", "hour", "4hour"]:
-        if timeframe == "second":
-            lookback = timedelta(seconds=candle_count * 10)
-        elif timeframe == "minute":
-            lookback = timedelta(minutes=candle_count * 1)
-        elif timeframe == "5min":
-            lookback = timedelta(minutes=candle_count * 5)
-        elif timeframe == "15min":
-            lookback = timedelta(minutes=candle_count * 15)
-        elif timeframe == "hour":
-            lookback = timedelta(hours=candle_count * 1)
-        elif timeframe == "4hour":
-            lookback = timedelta(hours=candle_count * 4)  # Corrected 4-hour lookback
+    # Get base timeframe for API call
+    base_timeframe = base_timeframe_mapping.get(timeframe, "minute")
+    multiplier = lookback_multipliers.get(timeframe, 1)
+    
+    # Calculate lookback period with extra data to ensure enough for aggregation
+    if base_timeframe == "second":
+        lookback = timedelta(seconds=candle_count * multiplier * 2)
+    elif base_timeframe == "minute":
+        lookback = timedelta(minutes=candle_count * multiplier * 2)
+    elif base_timeframe == "hour":
+        lookback = timedelta(hours=candle_count * multiplier * 2)
+    elif base_timeframe == "day":
+        lookback = timedelta(days=candle_count * multiplier * 2)
 
-        start_date = end_date - lookback
-    else:
-        start_date = end_date - timedelta(days=7)  # Default 7 days
+    start_date = end_date - lookback
+
+    # Ensure dates are not before Unix epoch (1970-01-01)
+    unix_epoch = datetime.datetime(1970, 1, 1, tzinfo=datetime.UTC)
+    if start_date < unix_epoch:
+        start_date = unix_epoch
 
     all_data = []
     current_date = start_date
 
     while current_date <= end_date:
-        next_date = min(current_date + timedelta(days=365), end_date)  # Polygon API limit
+        next_date = min(current_date + timedelta(days=365), end_date)
 
         try:
-            if timeframe in ["5min", "15min"]: 
-                timespan = "minute"
-            elif timeframe == "4hour": 
-                timespan = "hour"  # Fetch hourly data for 4-hour aggregation
-            elif timeframe == "second":
-                timespan = "second"  # Fetch second-level data for 10-second aggregation
-            else:
-                timespan = timeframe
-
             response = polygon_client.get_aggs(
                 ticker=ticker,
                 multiplier=1,
-                timespan=timespan,  
+                timespan=base_timeframe,
                 from_=current_date.strftime("%Y-%m-%d"),
                 to=next_date.strftime("%Y-%m-%d"),
-                limit=5000  # Important: Limit for each request
+                limit=50000
             )
 
-            if not response:
-                print(f"⚠️ No data for {ticker} ({timeframe}) from {current_date} to {next_date}")
-                current_date = next_date + timedelta(days=1)
-                continue
-
-            data = [
-                {
-                    "date": pd.to_datetime(agg.timestamp, unit="ms"),
-                    "open": agg.open,
-                    "high": agg.high,
-                    "low": agg.low,
-                    "close": agg.close,
-                    "volume": agg.volume
-                }
-                for agg in response
-            ]
-            all_data.extend(data)
+            if response:
+                data = [
+                    {
+                        "date": pd.to_datetime(agg.timestamp, unit="ms"),
+                        "open": agg.open,
+                        "high": agg.high,
+                        "low": agg.low,
+                        "close": agg.close,
+                        "volume": agg.volume
+                    }
+                    for agg in response
+                ]
+                all_data.extend(data)
 
         except Exception as e:
-            print(f"❌ Error fetching {ticker} ({timeframe}) from {current_date} to {next_date}: {e}")
-            current_date = next_date + timedelta(days=1)
-            continue
+            print(f"Error fetching data: {e}")
 
-        current_date = next_date + timedelta(days=1)  # Move to the next day
+        current_date = next_date + timedelta(days=1)
 
     df = pd.DataFrame(all_data)
-
+    
     if df.empty:
-        print(f"⚠️ Empty DataFrame after pagination for {ticker} ({timeframe})")
         return pd.DataFrame()
 
     df['date'] = pd.to_datetime(df['date'])
+    df.set_index('date', inplace=True)
 
-    numeric_cols = ['open', 'high', 'low', 'close', 'volume']
-    for col in numeric_cols:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+    # Updated resampling rules to use non-deprecated frequency strings
+    resample_rules = {
+        "1sec": '1s',    # Changed from 'S' to 's'
+        "10sec": '10s',  # Changed from 'S' to 's'
+        "minute": '1min',
+        "5min": '5min',
+        "15min": '15min',
+        "hour": '1h',    # Changed from 'H' to 'h'
+        "4hour": '4h',   # Changed from 'H' to 'h'
+        "day": '1D',
+        "week": '1W',
+        "month": 'ME',   # Changed from 'M' to 'ME'
+        "quarter": '3ME', # Changed from '3M' to '3ME'
+        "year": '1Y'
+    }
 
-    # Resample data based on timeframe
-    if timeframe == "5min":
-        df = df.resample("5min", on='date').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'})
-        df = df.reset_index()
-    elif timeframe == "15min":
-        df = df.resample("15min", on='date').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'})
-        df = df.reset_index()
-    elif timeframe == "second":  # Added aggregation for second
-        df = df.resample("1s", on='date').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'})   
-        df = df.reset_index()
-    elif timeframe == "4hour":  # Corrected 4-hour aggregation
-        df = df.resample("4h", on='date').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'})
-        df = df.reset_index()
+    if timeframe in resample_rules:
+        rule = resample_rules[timeframe]
+        df = df.resample(rule).agg({
+            'open': 'first',
+            'high': 'max',
+            'low': 'min',
+            'close': 'last',
+            'volume': 'sum'
+        }).dropna()
 
-    if timeframe in ["second", "minute", "5min", "15min", "hour", "4hour"]:
-        if not df.empty:
-            df = df.tail(candle_count).dropna()
-
-    return df
-
+    df.reset_index(inplace=True)
+    return df.tail(candle_count)
 
 #*********************************
 def calculate_indicators(df):

@@ -6,3 +6,4 @@ pandas
 plotly
 yfinance
 pandas_ta
+dash-extensions
