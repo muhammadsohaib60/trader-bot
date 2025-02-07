@@ -19,57 +19,45 @@ polygon_client = RESTClient(API_KEY)
 # Available stock tickers
 TICKERS = ["NVDA", "SMCI", "TEM", "GOOG", "TSLA", "AMZN", "META", "ARM", "AVGO", "MRVL", "PLTR", "QCOM", "TSM", "ASML", "MU", "AAPL", "MSFT", "WMT", "RGTI", "QUBT", "SOUN"]
 
-# Timeframe options
-# First keep the original timeframes as we want to display them
+# Timeframe options (only the specified timeframes)
 TIMEFRAMES = {
-    "1 Sec": "1sec",
-    "10 Sec": "10sec", 
-    "1 Min": "minute",
+    "1 Min": "1min",
     "5 Min": "5min",
     "15 Min": "15min",
-    "1 Hour": "hour",
+    "1 Hour": "1hour",
     "4 Hour": "4hour",
-    "1 Day": "day",
-    "1 Week": "week",
-    "1 Month": "month",
-    "1 Quarter": "quarter",
-    "1 Year": "year"
+    "1 Day": "1day",
+    "1 Week": "1week",
+    "1 Month": "1month"
 }
 
+# Update the fetch_stock_data function to handle the new timeframes
 def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=200):
     """Fetch and aggregate stock data with dynamic date range and limited data points."""
     end_date = datetime.datetime.now(datetime.UTC)
 
     # Map our timeframes to the smallest Polygon.io timeframe we need for accurate aggregation
     base_timeframe_mapping = {
-        "1sec": "second",
-        "10sec": "second",
-        "minute": "minute",
+        "1min": "minute",
         "5min": "minute",
         "15min": "minute",
-        "hour": "minute",
+        "1hour": "hour",
         "4hour": "hour",
-        "day": "day",
-        "week": "day",
-        "month": "day",
-        "quarter": "day",
-        "year": "day"
+        "1day": "day",
+        "1week": "day",
+        "1month": "day"
     }
 
     # Calculate appropriate lookback based on the timeframe
     lookback_multipliers = {
-        "1sec": 1,
-        "10sec": 10,
-        "minute": 1,
+        "1min": 1,
         "5min": 5,
         "15min": 15,
-        "hour": 60,
+        "1hour": 60,
         "4hour": 240,
-        "day": 1,
-        "week": 7,
-        "month": 30,
-        "quarter": 90,
-        "year": 365
+        "1day": 1,
+        "1week": 7,
+        "1month": 30
     }
 
     # Get base timeframe for API call
@@ -77,9 +65,7 @@ def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=200):
     multiplier = lookback_multipliers.get(timeframe, 1)
     
     # Calculate lookback period with extra data to ensure enough for aggregation
-    if base_timeframe == "second":
-        lookback = timedelta(seconds=candle_count * multiplier * 2)
-    elif base_timeframe == "minute":
+    if base_timeframe == "minute":
         lookback = timedelta(minutes=candle_count * multiplier * 2)
     elif base_timeframe == "hour":
         lookback = timedelta(hours=candle_count * multiplier * 2)
@@ -138,18 +124,14 @@ def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=200):
 
     # Updated resampling rules to use non-deprecated frequency strings
     resample_rules = {
-        "1sec": '1s',    # Changed from 'S' to 's'
-        "10sec": '10s',  # Changed from 'S' to 's'
-        "minute": '1min',
+        "1min": '1min',
         "5min": '5min',
         "15min": '15min',
-        "hour": '1h',    # Changed from 'H' to 'h'
-        "4hour": '4h',   # Changed from 'H' to 'h'
-        "day": '1D',
-        "week": '1W',
-        "month": 'ME',   # Changed from 'M' to 'ME'
-        "quarter": '3ME', # Changed from '3M' to '3ME'
-        "year": '1Y'
+        "1hour": '1h',
+        "4hour": '4h',
+        "1day": '1D',
+        "1week": '1W',
+        "1month": '1ME'
     }
 
     if timeframe in resample_rules:
@@ -164,6 +146,7 @@ def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=200):
 
     df.reset_index(inplace=True)
     return df.tail(candle_count)
+
 
 #*********************************
 def calculate_indicators(df):
@@ -205,6 +188,7 @@ DEFAULT_TIMEFRAME = "1 min"
 # Dash App
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 
+# Update the app layout to display 8 charts (2 rows of 4 charts each)
 app.layout = html.Div([
     html.H2("Stocks Dashboard"),
 
@@ -236,16 +220,7 @@ app.layout = html.Div([
     html.Div(id="error-message")
 ])
 
-@app.callback(
-    Output("custom-ticker-input", "style"),
-    Input("ticker-dropdown", "value")
-)
-def toggle_ticker_input(selected_ticker):
-    if selected_ticker == "custom":
-        return {"display": "block"}
-    else:
-        return {"display": "none"}
-
+# Update the chart container callback to display 8 charts
 @app.callback(
     Output("charts-container", "children"),
     Output("error-message", "children"),
@@ -377,6 +352,5 @@ def update_charts_container(selected_ticker, custom_ticker):
             charts.append(chart)
 
     return charts, error_message
-
 if __name__ == "__main__":
     app.run_server(debug=True)

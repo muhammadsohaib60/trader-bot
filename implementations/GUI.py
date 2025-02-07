@@ -228,7 +228,7 @@ app.layout = html.Div([
         "display": "flex",
         "flex-wrap": "wrap",
         "width": "100%",
-        "height": "80vh",  # Set a maximum height for the chart container (adjust as needed)
+        "height": "100vh",  # Set a maximum height for the chart container (adjust as needed)
         "overflow-y": "auto",  # Add a scrollbar if content exceeds height
     }),  # Flexbox for layout
 
