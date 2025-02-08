@@ -33,58 +33,37 @@ TIMEFRAMES = {
 
 # Update the fetch_stock_data function to handle the new timeframes
 def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=200):
-    """Fetch and aggregate stock data with dynamic date range and limited data points."""
+    """Fetch and aggregate stock data from minute-level data."""
     end_date = datetime.datetime.now(datetime.UTC)
-
-    # Map our timeframes to the smallest Polygon.io timeframe we need for accurate aggregation
-    base_timeframe_mapping = {
-        "1min": "minute",
-        "5min": "minute",
-        "15min": "minute",
-        "1hour": "hour",
-        "4hour": "hour",
-        "1day": "day",
-        "1week": "day",
-        "1month": "day"
-    }
-
-    # Calculate appropriate lookback based on the timeframe
-    lookback_multipliers = {
-        "1min": 1,
-        "5min": 5,
-        "15min": 15,
-        "1hour": 60,
-        "4hour": 240,
-        "1day": 1,
-        "1week": 7,
-        "1month": 30
-    }
-
-    # Get base timeframe for API call
-    base_timeframe = base_timeframe_mapping.get(timeframe, "minute")
-    multiplier = lookback_multipliers.get(timeframe, 1)
     
-    # Calculate lookback period with extra data to ensure enough for aggregation
+    # Map timeframes to appropriate base timeframe for fetching
+    timeframe_mapping = {
+        "1min": ("minute", 1),
+        "5min": ("minute", 5),
+        "15min": ("minute", 15),
+        "1hour": ("minute", 60),
+        "4hour": ("minute", 240),
+        "1day": ("day", 1),
+        "1week": ("day", 7),
+        "1month": ("day", 30)
+    }
+    
+    base_timeframe, multiplier = timeframe_mapping.get(timeframe, ("minute", 1))
+    
+    # Calculate lookback period
     if base_timeframe == "minute":
-        lookback = timedelta(minutes=candle_count * multiplier * 2)
-    elif base_timeframe == "hour":
-        lookback = timedelta(hours=candle_count * multiplier * 2)
-    elif base_timeframe == "day":
-        lookback = timedelta(days=candle_count * multiplier * 2)
-
+        lookback = timedelta(days=5)  # Get 5 days of minute data for intraday timeframes
+    else:
+        lookback = timedelta(days=365)  # Get 1 year of daily data for larger timeframes
+        
     start_date = end_date - lookback
-
-    # Ensure dates are not before Unix epoch (1970-01-01)
-    unix_epoch = datetime.datetime(1970, 1, 1, tzinfo=datetime.UTC)
-    if start_date < unix_epoch:
-        start_date = unix_epoch
 
     all_data = []
     current_date = start_date
 
     while current_date <= end_date:
-        next_date = min(current_date + timedelta(days=365), end_date)
-
+        next_date = min(current_date + timedelta(days=5), end_date)
+        
         try:
             response = polygon_client.get_aggs(
                 ticker=ticker,
@@ -114,29 +93,28 @@ def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=200):
 
         current_date = next_date + timedelta(days=1)
 
-    df = pd.DataFrame(all_data)
-    
-    if df.empty:
+    if not all_data:
         return pd.DataFrame()
 
+    df = pd.DataFrame(all_data)
     df['date'] = pd.to_datetime(df['date'])
     df.set_index('date', inplace=True)
 
-    # Updated resampling rules to use non-deprecated frequency strings
+    # Resample data based on timeframe
     resample_rules = {
-        "1min": '1min',
-        "5min": '5min',
-        "15min": '15min',
-        "1hour": '1h',
-        "4hour": '4h',
+        "1min": '1T',
+        "5min": '5T',
+        "15min": '15T',
+        "1hour": '1H',
+        "4hour": '4H',
         "1day": '1D',
         "1week": '1W',
-        "1month": '1ME'
+        "1month": '1M'
     }
 
     if timeframe in resample_rules:
         rule = resample_rules[timeframe]
-        df = df.resample(rule).agg({
+        df = df.resample(rule, closed='left', label='left').agg({
             'open': 'first',
             'high': 'max',
             'low': 'min',
@@ -145,8 +123,12 @@ def fetch_stock_data(ticker, timeframe, polygon_client, candle_count=200):
         }).dropna()
 
     df.reset_index(inplace=True)
+    
+    # Ensure we're working with current timezone
+    df['date'] = pd.to_datetime(df['date']).dt.tz_localize(None)
+    
+    # Return only the most recent candles
     return df.tail(candle_count)
-
 
 #*********************************
 def calculate_indicators(df):
@@ -235,12 +217,15 @@ def update_charts_container(selected_ticker, custom_ticker):
     for timeframe_label, timeframe_value in TIMEFRAMES.items():
         try:
             df = fetch_stock_data(ticker, timeframe_value, polygon_client)
+            print(f"Data for {timeframe_label}:")
+            print(df.head(2))
 
             if df.empty:
                 fig = go.Figure(data=[go.Scatter(x=[], y=[])], layout=go.Layout(title=f"No data for {ticker} ({timeframe_label})"))
                 error_message += f"No data found for {ticker} with the selected timeframe. "
             else:
                 df = calculate_indicators(df)
+
                 if df.empty:
                     fig = go.Figure(data=[go.Scatter(x=[], y=[])], layout=go.Layout(title=f"Error calculating indicators for {ticker}"))
                     error_message += f"Error calculating indicators for {ticker}. "
@@ -250,6 +235,8 @@ def update_charts_container(selected_ticker, custom_ticker):
 
                     df["date"] = pd.to_datetime(df["date"])  # Ensure it's in datetime format
                     df["date"] = df["date"] - pd.Timedelta(hours=7)  # Subtract 7 hours
+                    print(f"Adjusted date for {timeframe_label}:")
+                    print(df["date"].head(2))
 
                     fig.add_trace(go.Candlestick(
                         x=df["date"], open=df["open"], high=df["high"], low=df["low"], close=df["close"], name="Candlestick", showlegend=False
